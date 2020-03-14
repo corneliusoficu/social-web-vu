@@ -5,15 +5,20 @@ import os
 import tweepy
 
 import models
-import json
+import logging
+import jsonlines
 
 from datetime import datetime
 
 
-def parse_args():
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+
+
+def parse_args(config):
     parser = argparse.ArgumentParser(description='Extract tweets')
+    available_countries = list(config['LOCATION'].keys())
     parser.add_argument('--location', metavar='Location', type=str, help='Predefined location', required=True,
-                        choices=["Egypt", "Russia", "SaudiArabia"], dest='location')
+                        choices=available_countries, dest='location')
     return parser.parse_args()
 
 
@@ -35,7 +40,7 @@ access_token_secret = secrets_config['TWITTER']['AccessTokenSecret']
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token, access_token_secret)
 
-args = parse_args()
+args = parse_args(config)
 location_name = args.location
 geocode = config['LOCATION'][location_name]
 
@@ -44,20 +49,27 @@ cursor = tweepy\
     .Cursor(api.search, q=search_query, lang=language, count=count, since=since, geocode=geocode)\
     .items(count)
 
-tweets = {
-    'tweets': [],
-    'count': 0
-}
+out_dir = './results'
+
+if not os.path.exists(out_dir):
+    os.mkdir(out_dir)
+
+output_location = out_dir + "/" + "tweets-" + location_name + "-" + datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+output_file_handler = open(output_location, "w")
+lines_writer = jsonlines.Writer(output_file_handler, flush=True)
+count_tweets = 1
 
 for tweet in cursor:
     if hasattr(tweet, 'retweeted_status'):
         continue
+
     tweet = models.to_dataclass_tweet(tweet)
     author_screen_name = tweet.author.screen_name
     tweet_id = tweet.id
     query_replies = "to:{}".format(author_screen_name)
 
-    print("Tweet: {}".format(tweet.text))
+    logging.info("Tweet {}: {}".format(count_tweets, tweet.text))
+    count_tweets += 1
 
     cursor_replies = tweepy\
         .Cursor(api.search, lang=language, q=query_replies, since_id=tweet_id, result_type='recent')\
@@ -71,24 +83,15 @@ for tweet in cursor:
             reply = models.to_dataclass_tweet(reply)
             reply_as_dict = models.dataclass_to_dict(reply)
             replies.append(reply_as_dict)
-            print("Reply to tweet: {}".format(reply.text))
+            logging.info("Reply to tweet: {}".format(reply.text))
 
     if len(replies) > 0:
         tweet_as_dict['responses'] = replies
 
-    tweets['tweets'].append(tweet_as_dict)
-    tweets['count'] += 1
+    lines_writer.write(tweet_as_dict)
 
-out_dir = './results'
-
-if not os.path.exists(out_dir):
-    os.mkdir(out_dir)
-
-output_location = out_dir + "/" + "tweets-" + location_name + "-" + datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-
-with open(output_location, "w", encoding='utf8') as f:
-    f.write(json.dumps(tweets, indent=4, ensure_ascii=False))
-
+lines_writer.close()
+output_file_handler.close()
 
 
 
