@@ -1,7 +1,6 @@
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
 
 
 @dataclass
@@ -46,7 +45,7 @@ def to_dataclass_tweet(tweet):
     tweet = Tweet(
         id=tweet.id,
         id_str=tweet.id_str,
-        text=tweet.text,
+        text=tweet.full_text if hasattr(tweet, "full_text") else tweet.text,
         source=tweet.source,
         created_at=tweet.created_at,
         author=author,

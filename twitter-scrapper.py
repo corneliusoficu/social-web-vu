@@ -1,15 +1,13 @@
 import argparse
 import configparser
+import logging
 import os
+from datetime import datetime
 
+import jsonlines
 import tweepy
 
 import models
-import logging
-import jsonlines
-
-from datetime import datetime
-
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -37,16 +35,16 @@ consumer_secret = secrets_config['TWITTER']['ConsumerApiSecretKey']
 access_token = secrets_config['TWITTER']['AccessToken']
 access_token_secret = secrets_config['TWITTER']['AccessTokenSecret']
 
-auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-auth.set_access_token(access_token, access_token_secret)
 
 args = parse_args(config)
 location_name = args.location
 geocode = config['LOCATION'][location_name]
 
+auth = tweepy.AppAuthHandler(consumer_key, consumer_secret)
 api = tweepy.API(auth, wait_on_rate_limit=True)
 cursor = tweepy\
-    .Cursor(api.search, q=search_query, lang=language, count=count, since=since, geocode=geocode)\
+    .Cursor(api.search, q=search_query, lang=language, count=count, since=since, geocode=geocode,
+            tweet_mode="extended")\
     .items(count)
 
 out_dir = './results'
@@ -72,7 +70,8 @@ for tweet in cursor:
     count_tweets += 1
 
     cursor_replies = tweepy\
-        .Cursor(api.search, lang=language, q=query_replies, since_id=tweet_id, result_type='recent')\
+        .Cursor(api.search, lang=language, q=query_replies, since_id=tweet_id, result_type='recent',
+                tweet_mode="extended")\
         .items(count_replies)
 
     tweet_as_dict = models.dataclass_to_dict(tweet)
