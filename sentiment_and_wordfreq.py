@@ -1,3 +1,6 @@
+import os
+import sys
+
 import pandas as pd
 import nltk
 import jsonlines
@@ -21,18 +24,32 @@ def VADER_sentiment(data):
      
     #add sentiment score -> the data has to be in English, sooo I don't knowwww how to change it to russian and shit
     sentiment = []
+    tweets_sentiments = {
+        'positive': 0,
+        'negative': 0,
+        'neutral': 0
+    }
+
     for tweet in df['text']:
         VADER_score = vader_model.polarity_scores(tweet)
+
         for key, value in VADER_score.items():
             if key == 'compound':
                 if value >= 0.05:
                     sentiment.append('positive')
+                    tweets_sentiments['positive'] += 1
                 if value <= -0.05:
                     sentiment.append('negative')
-                if value > -0.05 and value < 0.05:
+                    tweets_sentiments['negative'] += 1
+                if -0.05 < value < 0.05:
                     sentiment.append('neutral')
+                    tweets_sentiments['neutral'] += 1
 
-    df['sentiment'] = sentiment
+    total = tweets_sentiments['positive'] + tweets_sentiments['negative'] + tweets_sentiments['neutral']
+    perc_positive = tweets_sentiments['positive'] / total * 100
+    perc_negative = tweets_sentiments['negative'] / total * 100
+    perc_neutral = tweets_sentiments['neutral'] / total * 100
+    print("Positive: {}% | Negative: {}% | Neutral: {}%".format(perc_positive, perc_negative, perc_neutral))
     return (df)
 
 
@@ -40,34 +57,22 @@ def word_frequencies_nouns(df):
     #get frequencies of words in relation to sentiment
     #return dataframe with rows of words and columns of pos - neg - neutral - total
     
-    sent_dict = dict()
+    word_freq_dict = {}
     for i in range(len(df)):
         #tokenize tweet and tag the words
         tokenized_tweet = nltk.word_tokenize(df['text'][i])
         tagged_tweets = nltk.pos_tag(tokenized_tweet)
-        sent = df['sentiment'][i]
-        
+
         for word, tag in tagged_tweets:
             #only take nouns
             if tag == 'NN':
-                if word not in sent_dict:
-                    sent_dict[word] = {'positive' : 0, 'negative' : 0, 'neutral' : 0, 'total' : 0}
-                sent_dict[word][sent] += 1
-                sent_dict[word]['total'] += 1
-                
-    df = pd.DataFrame(sent_dict).transpose()
-    return (df)
+                if word not in word_freq_dict:
+                    word_freq_dict[word] = 0
+                word_freq_dict[word] += 1
 
-
-def some_beautiful_plots_and_stuff(df):
-    #VERY UNFINISHED hahahaha it's just some ugly barplots for fun
-    most_positive = df.sort_values(['positive'], ascending=False)[:20]
-    MAJESTIC = most_positive.plot.bar()
-    most_negative = df.sort_values(['negative'], ascending=False)[:20]
-    AMAZING = most_negative.plot.bar()
+    word_freq_dict = {k: v for k, v in sorted(word_freq_dict.items(), key=lambda item: item[1], reverse=True)}
 
 
 if __name__ == '__main__':
     df_with_sentiment = VADER_sentiment('results/tweets-canada-2020-03-14_19:36:20')
-    word_frequencies_nouns = word_frequencies_nouns(df_with_sentiment)
-    some_beautiful_plots_and_stuff(word_frequencies_nouns)
+    word_frequencies_nouns(df_with_sentiment)
